@@ -1,39 +1,49 @@
 # Gesture Controlled 3D Particles
 
 An interactive **gesture-controlled 3D particle visualization** built using **Three.js** and **MediaPipe Hands**.  
-The project uses real-time hand tracking via a webcam to control particle **scale, color, and shape** through intuitive gestures.
+This project uses real-time webcam input to control particle **scale, color, and shape** based on natural hand gestures.
 
-This project focuses on **human–computer interaction**, **GPU-based rendering**, and **real-time input processing** in the browser.
-
----
-
-## 🔗 Live Preview
-> Run locally using a server (camera access required)
+It demonstrates browser-based computer vision integration with GPU-accelerated graphics and intuitive gesture interaction.
 
 ---
 
-## ✨ Features
+## 🔗 Live Demo
+
+👉 **Live Preview:** https://bhavanish-mantri.github.io/3D_particle/
+
+> Best experienced on desktop browsers with webcam support (Chrome recommended).
+
+---
+
+## ✨ Key Features
 
 - 🎥 **Real-time hand tracking** using MediaPipe Hands
-- 🌌 **GPU-accelerated particle system** using custom GLSL shaders
-- 🤏 **Pinch gesture (thumb + index)** to scale particles
-- 🎨 **Hand X-axis movement** to dynamically change particle color
-- ✋ **Finger count detection** to switch particle shapes:
-  - 1 Finger → Fireworks
-  - 2 Fingers → Heart
-  - 3 Fingers → Saturn Ring
-  - 4 Fingers → Flower
-- 🧠 Smooth integration of computer vision + WebGL
+- 🌌 **Custom 3D particle system** rendered with Three.js and GLSL shaders
+- 🤏 **Pinch gesture** (thumb + index) to dynamically scale particles
+- 🎨 Control particle **color** via horizontal hand movement
+- ✋ **Finger count detection** to switch particle formations:
+  - **1 Finger** → Fireworks
+  - **2 Fingers** → Heart
+  - **3 Fingers** → Saturn Ring
+  - **4 Fingers** → Flower
+- ⚡ All particle effects computed on the GPU for smooth performance
 
 ---
 
-## 🛠️ Technologies Used
+## 🛠️ Technologies & Tools
 
-- **HTML5 / CSS3 / JavaScript**
-- **Three.js** – 3D rendering & shaders
-- **MediaPipe Hands** – Hand landmark detection
-- **GLSL** – Custom vertex & fragment shaders
-- **WebRTC** – Camera input via browser
+- **HTML / CSS / JavaScript**
+- **Three.js** – WebGL-based 3D rendering
+- **MediaPipe Hands** – Real-time hand landmark detection
+- **GLSL** – Vertex and fragment shaders
+- **WebRTC** – Browser camera access
+
+---
+
+## 🧠 Concept & Approach
+
+This project uses MediaPipe to detect hand landmarks in each video frame.  
+Gesture signals such as pinch distance, finger count, and horizontal hand position are mapped to shader uniforms that control particle system behavior, enabling real-time interaction between user movement and rendered visuals.
 
 ---
 
@@ -41,7 +51,39 @@ This project focuses on **human–computer interaction**, **GPU-based rendering*
 ```
 index.html
 ```
-> Shaders are embedded directly in the HTML to ensure compatibility and avoid async loading issues.
+
+> The project is currently contained in a single HTML file for simplicity and portability.
 
 ---
 
+## 📌 What This Project Demonstrates
+
+- Browser-based real-time computer vision workflows
+- Gesture-driven interaction design
+- Shader programming and GPU particle systems
+- Integrating MediaPipe with WebGL pipelines
+- Mapping physical user motion to visual feedback
+
+---
+
+## ⚠️ Limitations
+
+- Requires a webcam and camera permission
+- Gesture detection accuracy varies with lighting conditions
+- Performance may vary on low-end hardware
+
+---
+
+## 🚀 Future Enhancements
+
+- Support for two-hand interactions
+- Gesture filtering for smoother transitions
+- Modular shader files
+- Recording / screenshot capabilities
+- Mobile browser support
+
+---
+
+## 📄 License
+
+This project is open-source and intended for learning, experimentation, and demonstration purposes.
