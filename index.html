@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gesture Controlled 3D Particles</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #050505; font-family: 'Segoe UI', sans-serif; }
+        canvas { display: block; position: absolute; top: 0; left: 0; z-index: 1; }
+        
+        /* Video feed for debugging (mirrored) */
+        #input_video {
+            position: absolute; bottom: 20px; right: 20px;
+            width: 200px; height: 150px;
+            z-index: 2; border-radius: 10px;
+            transform: scaleX(-1); 
+            border: 2px solid rgba(255,255,255,0.3);
+        }
+
+        #ui-layer {
+            position: absolute; top: 20px; left: 20px; z-index: 3;
+            color: white; pointer-events: none;
+        }
+        h1 { margin: 0; font-size: 1.5rem; text-transform: uppercase; letter-spacing: 2px; }
+        .status { font-size: 0.9rem; color: #aaa; margin-top: 5px; }
+        .controls { margin-top: 15px; font-size: 0.9rem; line-height: 1.6; background: rgba(0,0,0,0.6); padding: 15px; border-radius: 8px; }
+        .highlight { color: #00ffcc; font-weight: bold; }
+        
+        #loading {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            color: white; font-size: 1.2rem; z-index: 10;
+        }
+    </style>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+</head>
+<body>
+
+    <div id="loading">Initializing Camera & AI Model...</div>
+
+    <div id="ui-layer">
+        <h1>Particle Gestures</h1>
+        <div class="status" id="status-text">Waiting for hand...</div>
+        <div class="controls">
+            <div> <b>Gestures:</b></div>
+            <div>• <span class="highlight">Pinch (Thumb+Index):</span> Scale/Expand</div>
+            <div>• <span class="highlight">Hand Position (X-axis):</span> Change Color</div>
+            <div>• <span class="highlight">1 Finger:</span> Fireworks</div>
+            <div>• <span class="highlight">2 Fingers:</span> Heart</div>
+            <div>• <span class="highlight">3 Fingers:</span> Saturn Ring</div>
+            <div>• <span class="highlight">4 Fingers:</span> Flower</div>
+        </div>
+    </div>
+
+    <video id="input_video"></video>
+
+    <script id="vertexShader" type="x-shader/x-vertex">
+        uniform float uTime;
+        uniform float uScale;
+        uniform float uHue;
+        uniform float uTemplate; // 0=Fireworks, 1=Heart, 2=Saturn, 3=Flower
+
+        attribute vec3 aRandom;
+        attribute float aSize;
+        
+        varying vec3 vColor;
+
+        #define PI 3.14159265359
+
+        // Helper: Rotate vector
+        vec3 rotate(vec3 v, vec3 axis, float angle) {
+            return mix(dot(axis, v) * axis, v, cos(angle)) + cross(axis, v) * sin(angle);
+        }
+
+        // Helper: HSL to RGB
+        vec3 hsl2rgb(vec3 c) {
+            vec3 rgb = clamp(abs(mod(c.x * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0);
+            return c.z + c.y * (rgb - 0.5) * (1.0 - abs(2.0 * c.z - 1.0));
+        }
+
+        void main() {
+            vec3 pos = position; // Original position (0,0,0)
+            vec3 finalPos = vec3(0.0);
+            float t = uTime * 0.5;
+
+            //FIREWORKS (Explosion)
+            if (abs(uTemplate - 0.0) < 0.1) {
+                // Sphere distribution
+                vec3 dir = normalize(aRandom);
+                // Pulse effect
+                float burst = mod(t + length(aRandom), 2.0);
+                finalPos = dir * burst * 30.0;
+            }
+            
+            // HEART (Parametric) 
+            else if (abs(uTemplate - 1.0) < 0.1) {
+                // Approximate t parameter from random
+                float phi = aRandom.x * PI * 2.0; 
+                float theta = aRandom.y * PI;
+                
+                // Cardioid formula 2D projected to 3D
+                float x = 16.0 * pow(sin(phi), 3.0);
+                float y = 13.0 * cos(phi) - 5.0 * cos(2.0*phi) - 2.0 * cos(3.0*phi) - cos(4.0*phi);
+                
+                finalPos = vec3(x, y, aRandom.z * 5.0);
+                finalPos *= 0.5; // Scale down
+                
+                // Gentle rotation
+                finalPos = rotate(finalPos, vec3(0.0, 1.0, 0.0), t * 0.5);
+            }
+
+            //  SATURN (Ring + Core) 
+            else if (abs(uTemplate - 2.0) < 0.1) {
+                float angle = aRandom.x * PI * 2.0;
+                float dist = 0.0;
+                
+                // 80% particles in ring, 20% in core
+                if (aRandom.y > -0.6) {
+                    dist = 15.0 + aRandom.z * 4.0; // Ring radius
+                } else {
+                    dist = aRandom.z * 5.0; // Planet core
+                }
+                
+                finalPos = vec3(cos(angle) * dist, sin(angle) * dist, aRandom.y * 0.5);
+                
+                // Tilt the planet
+                finalPos = rotate(finalPos, vec3(1.0, 0.0, 0.0), 0.5);
+                // Orbit rotation
+                finalPos = rotate(finalPos, vec3(0.0, 1.0, 0.0), t);
+            }
+
+            // FLOWER (Sine modulated sphere) 
+            else if (abs(uTemplate - 3.0) < 0.1) {
+                float u = aRandom.x * PI * 2.0; // angle around
+                float v = aRandom.y * PI;       // angle up/down
+                
+                // Modulate radius with sine waves to create petals
+                float r = 10.0 + 5.0 * sin(5.0 * u) * sin(5.0 * v); 
+                
+                finalPos.x = r * sin(v) * cos(u);
+                finalPos.y = r * sin(v) * sin(u);
+                finalPos.z = r * cos(v);
+                
+                finalPos = rotate(finalPos, vec3(0.0, 1.0, 0.0), t * 0.2);
+            }
+            
+            //  GLOBAL INTERACTION 
+            // Apply Pinch Scale
+            finalPos *= uScale;
+
+            //  COLOR 
+            // Hue guided by hand position (uHue) + particle variance
+            float hue = fract(uHue + length(finalPos) * 0.01);
+            vColor = hsl2rgb(vec3(hue, 0.8, 0.6));
+
+            vec4 mvPosition = modelViewMatrix * vec4(finalPos, 1.0);
+            gl_Position = projectionMatrix * mvPosition;
+            
+            // Size attenuation (particles shrink when far away)
+            gl_PointSize = (5.0 * aSize * uScale) * (30.0 / -mvPosition.z);
+        }
+    </script>
+
+    <script id="fragmentShader" type="x-shader/x-fragment">
+        varying vec3 vColor;
+        
+        void main() {
+            // Circular particle shape
+            vec2 coord = gl_PointCoord - vec2(0.5);
+            if(length(coord) > 0.5) discard;
+            
+            // Soft glow center
+            float strength = 1.0 - (length(coord) * 2.0);
+            strength = pow(strength, 1.5);
+
+            gl_FragColor = vec4(vColor, strength);
+        }
+    </script>
+
+    <script>
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.z = 40;
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        document.body.appendChild(renderer.domElement);
+
+        // PARTICLE SYSTEM SETUP
+        const count = 30000;
+        const geometry = new THREE.BufferGeometry();
+        const positions = new Float32Array(count * 3);
+        const randoms = new Float32Array(count * 3);
+        const sizes = new Float32Array(count);
+
+        for(let i = 0; i < count; i++) {
+            positions[i*3] = 0; positions[i*3+1] = 0; positions[i*3+2] = 0;
+            randoms[i*3] = (Math.random() - 0.5) * 2;
+            randoms[i*3+1] = (Math.random() - 0.5) * 2;
+            randoms[i*3+2] = (Math.random() - 0.5) * 2;
+            sizes[i] = Math.random();
+        }
+
+        geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        geometry.setAttribute('aRandom', new THREE.BufferAttribute(randoms, 3));
+        geometry.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1));
+
+        const material = new THREE.ShaderMaterial({
+            vertexShader: document.getElementById('vertexShader').textContent,
+            fragmentShader: document.getElementById('fragmentShader').textContent,
+            uniforms: {
+                uTime: { value: 0 },
+                uScale: { value: 1.0 },
+                uHue: { value: 0.5 },
+                uTemplate: { value: 0.0 }
+            },
+            transparent: true,
+            depthWrite: false,
+            blending: THREE.AdditiveBlending
+        });
+
+        const particles = new THREE.Points(geometry, material);
+        scene.add(particles);
+
+        //  ANIMATION LOOP 
+        const clock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+            material.uniforms.uTime.value = clock.getElapsedTime();
+            
+            // Smoothly interpolate values if needed here for smoother transitions
+            
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        //  MEDIAPIPE HAND TRACKING INTEGRATION
+        
+        const videoElement = document.getElementById('input_video');
+        const statusText = document.getElementById('status-text');
+        const loadingText = document.getElementById('loading');
+
+        // State variables
+        let activeTemplate = 0; // 0:Fireworks, 1:Heart, 2:Saturn, 3=Flower
+
+        function onResults(results) {
+            loadingText.style.display = 'none';
+
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                statusText.innerText = "Hand Detected";
+                statusText.style.color = "#00ffcc";
+                
+                const landmarks = results.multiHandLandmarks[0];
+
+                // CALCULATE PINCH (Thumb tip #4 to Index tip #8)
+                const thumbTip = landmarks[4];
+                const indexTip = landmarks[8];
+                const distance = Math.sqrt(
+                    Math.pow(thumbTip.x - indexTip.x, 2) + 
+                    Math.pow(thumbTip.y - indexTip.y, 2)
+                );
+                
+                // Map distance (approx 0.02 to 0.3) to scale (0.5 to 3.0)
+                let scale = THREE.MathUtils.mapLinear(distance, 0.02, 0.2, 0.5, 3.0);
+                scale = THREE.MathUtils.clamp(scale, 0.5, 3.0);
+                
+                // Update Uniform
+                material.uniforms.uScale.value = scale;
+
+                // CALCULATE COLOR (Wrist X position)
+                // Mirror X because camera is mirrored
+                let hue = 1.0 - landmarks[0].x; 
+                material.uniforms.uHue.value = hue;
+
+                // DETECT FINGER COUNT (Simple y-axis check against knuckles)
+                // Tips: 8, 12, 16, 20. Knuckles: 6, 10, 14, 18.
+                let fingersUp = 0;
+                if (landmarks[8].y < landmarks[6].y) fingersUp++;  // Index
+                if (landmarks[12].y < landmarks[10].y) fingersUp++; // Middle
+                if (landmarks[16].y < landmarks[14].y) fingersUp++; // Ring
+                if (landmarks[20].y < landmarks[18].y) fingersUp++; // Pinky
+                
+                // Map fingers to templates
+                if (fingersUp === 1) activeTemplate = 0; // Fireworks
+                if (fingersUp === 2) activeTemplate = 1; // Heart
+                if (fingersUp === 3) activeTemplate = 2; // Saturn
+                if (fingersUp === 4) activeTemplate = 3; // Flower
+                
+                // Smooth transition could be added, but direct set is fine for immediate feedback
+                material.uniforms.uTemplate.value = activeTemplate;
+
+            } else {
+                statusText.innerText = "Waiting for hand...";
+                statusText.style.color = "#aaa";
+                // Optionally reset scale or float when no hand detected
+                // material.uniforms.uScale.value = 1.0;
+            }
+        }
+
+        // Initialize MediaPipe Hands
+        const hands = new Hands({locateFile: (file) => {
+            return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+        }});
+
+        hands.setOptions({
+            maxNumHands: 1,
+            modelComplexity: 1,
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5
+        });
+
+        hands.onResults(onResults);
+
+        // Start Camera
+        const cameraUtils = new Camera(videoElement, {
+            onFrame: async () => {
+                await hands.send({image: videoElement});
+            },
+            width: 640,
+            height: 480
+        });
+        
+        cameraUtils.start().catch(err => {
+            console.error("Camera error:", err);
+            loadingText.innerText = "Error: Camera access denied or not available.";
+        });
+
+    </script>
+</body>
+</html>
